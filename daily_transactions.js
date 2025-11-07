@@ -1,9 +1,9 @@
 // ------------------------------
 // Main Sheet URLs
 // ------------------------------
-const WD_URL = "https://opensheet.elk.sh/126HVa6SNG1vUz6F7_PKltLy_0ieZvDFyxjMGcc6Eu1E/WD";
-const DP_URL = "https://opensheet.elk.sh/126HVa6SNG1vUz6F7_PKltLy_0ieZvDFyxjMGcc6Eu1E/DP";
-const B2B_URL = "https://opensheet.elk.sh/126HVa6SNG1vUz6F7_PKltLy_0ieZvDFyxjMGcc6Eu1E/B2B";
+const WD_URL = "https://opensheet.elk.sh/19eCfiWh46hQUqyAwcpx4OD_3nPFDVK1p1BYbcncMT4M/WD";
+const DP_URL = "https://opensheet.elk.sh/19eCfiWh46hQUqyAwcpx4OD_3nPFDVK1p1BYbcncMT4M/DP";
+const B2B_URL = "https://opensheet.elk.sh/19eCfiWh46hQUqyAwcpx4OD_3nPFDVK1p1BYbcncMT4M/B2B";
 
 // Backup_Index URL
 const BACKUP_INDEX_URL = "https://opensheet.elk.sh/<BACKUP_INDEX_SHEET_ID>/Backup_Index";
