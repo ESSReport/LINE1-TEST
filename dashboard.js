@@ -3,7 +3,7 @@
 /* -------------------------
    Configuration / Helpers
    ------------------------- */
-const SHEET_ID = "1eUETYzpLr1bv9cPIIQnQszWoMP5BHlBfk1kXSP67X04";
+const SHEET_ID = "1OuOwMmDeDyctpu260aFuieNi7y3Tg8vVK6NRMlME1IE";
 const OPENSHEET_BASE = `https://opensheet.elk.sh/${SHEET_ID}`;
 const OPENSHEET = {
   SHOPS_BALANCE: `${OPENSHEET_BASE}/SHOPS%20BALANCE`,
