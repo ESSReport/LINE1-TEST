@@ -24,6 +24,10 @@ const parseNumber = v => {
   const n = Number(s);
   return isFinite(n) ? n : 0;
 };
+const parseCommRate = v => {
+  if (!v) return 0;
+  return parseFloat(String(v).replace("%","")) || 0;
+};
 const normalize = row => {
   const out = {};
   for (const k in row) out[cleanKey(k)] = String(row[k]||"").trim();
@@ -183,16 +187,12 @@ function exportCSV() {
     rows.push(row);
   });
   const blob = new Blob([rows.join("\n")], {type:"text/csv;charset=utf-8"});
-  if (typeof saveAs !== "function") {
-    console.error("FileSaver (saveAs) not available.");
-    alert("Download failed: FileSaver.js not loaded.");
-    return;
-  }
+  if (typeof saveAs !== "function") { alert("Download failed: FileSaver.js not loaded."); return; }
   saveAs(blob, `Shops_Summary_${new Date().toISOString().slice(0,10)}.csv`);
 }
 
 /* -------------------------
-   ZIP Download (updated to match shop_dashboard.js logic)
+   ZIP Download (final corrected)
    ------------------------- */
 async function downloadAllShops() {
   if (!cachedData.length) { alert("No shop data available"); return; }
@@ -209,6 +209,7 @@ async function downloadAllShops() {
 
     const normalizeStr = str => (str||"").trim().toUpperCase();
     const parseNum = v => { if (!v) return 0; const s=String(v).replace(/,/g,"").replace(/\((.*)\)/,"-$1").trim(); return Number(s)||0; };
+    const parseComm = v => { if(!v) return 0; return parseFloat(String(v).replace("%",""))||0; };
     const formatNum = v => (v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
 
     for (const shop of cachedData) {
@@ -221,9 +222,9 @@ async function downloadAllShops() {
       const securityDeposit = parseNum(shopRow?.["SECURITY DEPOSIT"]);
 
       const tlRow = commData.find(r => normalizeStr(r.SHOP) === normalizedShop);
-      const dpCommRate = parseNum(tlRow?.["DP COMM"]);
-      const wdCommRate = parseNum(tlRow?.["WD COMM"]);
-      const addCommRate = parseNum(tlRow?.["ADD COMM"]);
+      const dpCommRate = parseComm(tlRow?.["DP COMM"]);
+      const wdCommRate = parseComm(tlRow?.["WD COMM"]);
+      const addCommRate = parseComm(tlRow?.["ADD COMM"]);
 
       const datesSet = new Set([
         ...depositData.filter(r=>normalizeStr(r.SHOP)===normalizedShop).map(r=>r.DATE),
@@ -240,7 +241,6 @@ async function downloadAllShops() {
       csvRows.push(`Security Deposit: ${formatNum(securityDeposit)}`);
       csvRows.push(`Bring Forward Balance: ${formatNum(bringForwardBalance)}`);
       csvRows.push(`Team Leader: ${teamLeader}`);
-
       const headers = ["DATE","DEPOSIT","WITHDRAWAL","IN","OUT","SETTLEMENT","SPECIAL PAYMENT","ADJUSTMENT","SEC DEPOSIT","DP COMM","WD COMM","ADD COMM","BALANCE"];
       csvRows.push(headers.map(h=>`"${h}"`).join(','));
 
@@ -255,8 +255,8 @@ async function downloadAllShops() {
 
         const depTotal = deposits.reduce((s,r)=>s+parseNum(r.AMOUNT),0);
         const wdTotal = withdrawals.reduce((s,r)=>s+parseNum(r.AMOUNT),0);
-
         const sumMode = mode => stlmForDate.filter(r=>normalizeStr(r.MODE)===mode).reduce((s,r)=>s+parseNum(r.AMOUNT),0);
+
         const inAmt = sumMode("IN");
         const outAmt = sumMode("OUT");
         const settlement = sumMode("SETTLEMENT");
@@ -287,15 +287,12 @@ async function downloadAllShops() {
         ].map(v=>`"${v}"`).join(','));
       }
 
-      csvRows.push(["TOTAL","","","","","","","","","","","",formatNum(runningBalance)].map(v=>`"${v}"`).join(','));
-
       const folder = zip.folder(teamLeader);
       folder.file(`${shopName}.csv`, csvRows.join('\n'));
     }
 
     const content = await zip.generateAsync({type:"blob"});
     saveAs(content, `All_Shops_Summary_${new Date().toISOString().slice(0,10)}.zip`);
-
   } catch(err){
     console.error(err);
     alert("⚠️ Failed to generate ZIP: "+err.message);
