@@ -192,12 +192,12 @@ function exportCSV() {
 }
 
 /* -------------------------
-   ZIP Download (corrected)
+   ZIP Download (updated to match shop_dashboard.js logic)
    ------------------------- */
 async function downloadAllShops() {
   if (!cachedData.length) { alert("No shop data available"); return; }
-
   const zip = new JSZip();
+
   try {
     const [depositData, withdrawalData, stlmData, commData, shopBalanceData] = await Promise.all([
       fetch(OPENSHEET.DEPOSIT).then(r=>r.json()),
@@ -213,44 +213,49 @@ async function downloadAllShops() {
 
     for (const shop of cachedData) {
       const shopName = shop["SHOP NAME"];
+      const normalizedShop = normalizeStr(shopName);
       const teamLeader = shop["TEAM LEADER"] || "Unknown";
-      const shopRow = shopBalanceData.find(r => normalizeStr(r["SHOP"])===normalizeStr(shopName));
+
+      const shopRow = shopBalanceData.find(r => normalizeStr(r["SHOP"]) === normalizedShop);
       const bringForwardBalance = parseNum(shopRow?.["BRING FORWARD BALANCE"]);
       const securityDeposit = parseNum(shopRow?.["SECURITY DEPOSIT"]);
 
-      const commRow = commData.find(r=>normalizeStr(r.SHOP)===normalizeStr(shopName));
-      const dpCommRate = parseNum(commRow?.["DP COMM"]);
-      const wdCommRate = parseNum(commRow?.["WD COMM"]);
-      const addCommRate = parseNum(commRow?.["ADD COMM"]);
+      const tlRow = commData.find(r => normalizeStr(r.SHOP) === normalizedShop);
+      const dpCommRate = parseNum(tlRow?.["DP COMM"]);
+      const wdCommRate = parseNum(tlRow?.["WD COMM"]);
+      const addCommRate = parseNum(tlRow?.["ADD COMM"]);
 
       const datesSet = new Set([
-        ...depositData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName)).map(r=>r.DATE),
-        ...withdrawalData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName)).map(r=>r.DATE),
-        ...stlmData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName)).map(r=>r.DATE)
+        ...depositData.filter(r=>normalizeStr(r.SHOP)===normalizedShop).map(r=>r.DATE),
+        ...withdrawalData.filter(r=>normalizeStr(r.SHOP)===normalizedShop).map(r=>r.DATE),
+        ...stlmData.filter(r=>normalizeStr(r.SHOP)===normalizedShop).map(r=>r.DATE)
       ]);
       const sortedDates = Array.from(datesSet).filter(Boolean).sort((a,b)=>new Date(a)-new Date(b));
 
       let runningBalance = bringForwardBalance;
       const csvRows = [];
+
       csvRows.push(shopName);
       csvRows.push(`Shop Name: ${shopName}`);
       csvRows.push(`Security Deposit: ${formatNum(securityDeposit)}`);
       csvRows.push(`Bring Forward Balance: ${formatNum(bringForwardBalance)}`);
       csvRows.push(`Team Leader: ${teamLeader}`);
+
       const headers = ["DATE","DEPOSIT","WITHDRAWAL","IN","OUT","SETTLEMENT","SPECIAL PAYMENT","ADJUSTMENT","SEC DEPOSIT","DP COMM","WD COMM","ADD COMM","BALANCE"];
       csvRows.push(headers.map(h=>`"${h}"`).join(','));
 
       if (bringForwardBalance) {
-        csvRows.push([ "B/F Balance", 0,0,0,0,0,0,0,0,0,0,0, formatNum(runningBalance) ].map(v=>`"${v}"`).join(','));
+        csvRows.push(['B/F Balance','0.00','0.00','0.00','0.00','0.00','0.00','0.00','0.00','0.00','0.00','0.00',formatNum(runningBalance)].map(v=>`"${v}"`).join(','));
       }
 
       for (const date of sortedDates) {
-        const deposits = depositData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName) && r.DATE===date);
-        const withdrawals = withdrawalData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName) && r.DATE===date);
-        const stlmForDate = stlmData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName) && r.DATE===date);
+        const deposits = depositData.filter(r=>normalizeStr(r.SHOP)===normalizedShop && r.DATE===date);
+        const withdrawals = withdrawalData.filter(r=>normalizeStr(r.SHOP)===normalizedShop && r.DATE===date);
+        const stlmForDate = stlmData.filter(r=>normalizeStr(r.SHOP)===normalizedShop && r.DATE===date);
 
         const depTotal = deposits.reduce((s,r)=>s+parseNum(r.AMOUNT),0);
         const wdTotal = withdrawals.reduce((s,r)=>s+parseNum(r.AMOUNT),0);
+
         const sumMode = mode => stlmForDate.filter(r=>normalizeStr(r.MODE)===mode).reduce((s,r)=>s+parseNum(r.AMOUNT),0);
         const inAmt = sumMode("IN");
         const outAmt = sumMode("OUT");
@@ -258,6 +263,7 @@ async function downloadAllShops() {
         const specialPay = sumMode("SPECIAL PAYMENT");
         const adjustment = sumMode("ADJUSTMENT");
         const secDep = sumMode("SECURITY DEPOSIT");
+
         const dpComm = depTotal*dpCommRate/100;
         const wdComm = wdTotal*wdCommRate/100;
         const addComm = depTotal*addCommRate/100;
@@ -289,6 +295,7 @@ async function downloadAllShops() {
 
     const content = await zip.generateAsync({type:"blob"});
     saveAs(content, `All_Shops_Summary_${new Date().toISOString().slice(0,10)}.zip`);
+
   } catch(err){
     console.error(err);
     alert("⚠️ Failed to generate ZIP: "+err.message);
