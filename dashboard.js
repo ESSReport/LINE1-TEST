@@ -13,7 +13,7 @@ const OPENSHEET = {
 
 const HEADERS = [
   "SHOP NAME","TEAM LEADER","GROUP NAME","SECURITY DEPOSIT","BRING FORWARD BALANCE",
-  "TOTAL DEPOSIT","TOTAL WITHDRAWAL","INTERNAL TRANSFER IN","INTERNAL TRANSFAER OUT",
+  "TOTAL DEPOSIT","TOTAL WITHDRAWAL","INTERNAL TRANSFER IN","INTERNAL TRANSFER OUT",
   "SETTLEMENT","SPECIAL PAYMENT","ADJUSTMENT","DP COMM","WD COMM","ADD COMM","RUNNING BALANCE"
 ];
 
@@ -51,13 +51,13 @@ function buildSummary(data){
     if(!summary[shop]) summary[shop] = Object.assign({}, ...HEADERS.map(h=> ({
       [h]: (h==="SHOP NAME"? shop : (h==="TEAM LEADER"? ((r["TEAM LEADER"]||"").trim().toUpperCase()) : (h==="GROUP NAME"? ((r["GROUP NAME"]||"").trim().toUpperCase()) : 0) ))
     })));
-    ["SECURITY DEPOSIT","BRING FORWARD BALANCE","TOTAL DEPOSIT","TOTAL WITHDRAWAL","INTERNAL TRANSFER IN","INTERNAL TRANSFAER OUT","SETTLEMENT","SPECIAL PAYMENT","ADJUSTMENT","DP COMM","WD COMM","ADD COMM"].forEach(key=>{
+    ["SECURITY DEPOSIT","BRING FORWARD BALANCE","TOTAL DEPOSIT","TOTAL WITHDRAWAL","INTERNAL TRANSFER IN","INTERNAL TRANSFER OUT","SETTLEMENT","SPECIAL PAYMENT","ADJUSTMENT","DP COMM","WD COMM","ADD COMM"].forEach(key=>{
       summary[shop][key] = (summary[shop][key] || 0) + parseNumber(r[key]);
     });
     summary[shop]["RUNNING BALANCE"] = 
       (summary[shop]["BRING FORWARD BALANCE"]||0) +
       (summary[shop]["TOTAL DEPOSIT"]||0) - (summary[shop]["TOTAL WITHDRAWAL"]||0) +
-      (summary[shop]["INTERNAL TRANSFER IN"]||0) - (summary[shop]["INTERNAL TRANSFAER OUT"]||0) -
+      (summary[shop]["INTERNAL TRANSFER IN"]||0) - (summary[shop]["INTERNAL TRANSFER OUT"]||0) -
       (summary[shop]["SETTLEMENT"]||0) - (summary[shop]["SPECIAL PAYMENT"]||0) +
       (summary[shop]["ADJUSTMENT"]||0) - (summary[shop]["DP COMM"]||0) -
       (summary[shop]["WD COMM"]||0) - (summary[shop]["ADD COMM"]||0);
@@ -194,10 +194,105 @@ function exportCSV() {
 /* -------------------------
    ZIP Download
    ------------------------- */
-// Keep your existing downloadAllShops() logic unchanged
+async function downloadAllShops() {
+  if (!cachedData.length) { alert("No shop data available"); return; }
+
+  const zip = new JSZip();
+  try {
+    // Fetch all sheets
+    const [depositData, withdrawalData, stlmData, commData, shopBalanceData] = await Promise.all([
+      fetch(OPENSHEET.DEPOSIT).then(r=>r.json()),
+      fetch(OPENSHEET.WITHDRAWAL).then(r=>r.json()),
+      fetch(OPENSHEET.STLM).then(r=>r.json()),
+      fetch(OPENSHEET.COMM).then(r=>r.json()),
+      fetch(OPENSHEET.SHOPS_BALANCE).then(r=>r.json())
+    ]);
+
+    const normalizeStr = str => (str||"").trim().toUpperCase();
+    const parseNum = v => { if (!v) return 0; const s=String(v).replace(/,/g,"").replace(/\((.*)\)/,"-$1").trim(); return Number(s)||0; };
+    const formatNum = v => (v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+    for (const shop of cachedData) {
+      const shopName = shop["SHOP NAME"];
+      const teamLeader = shop["TEAM LEADER"] || "Unknown";
+      const shopRow = shopBalanceData.find(r => normalizeStr(r["SHOP"])===normalizeStr(shopName));
+      const bringForwardBalance = parseNum(shopRow?.["BRING FORWARD BALANCE"]);
+      const securityDeposit = parseNum(shopRow?.["SECURITY DEPOSIT"]);
+
+      const dpCommRate = parseNum(commData.find(r=>normalizeStr(r.SHOP)===normalizeStr(shopName))?.["DP COMM"]);
+      const wdCommRate = parseNum(commData.find(r=>normalizeStr(r.SHOP)===normalizeStr(shopName))?.["WD COMM"]);
+      const addCommRate = parseNum(commData.find(r=>normalizeStr(r.SHOP)===normalizeStr(shopName))?.["ADD COMM"]);
+
+      const datesSet = new Set([
+        ...depositData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName)).map(r=>r.DATE),
+        ...withdrawalData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName)).map(r=>r.DATE),
+        ...stlmData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName)).map(r=>r.DATE)
+      ]);
+      const sortedDates = Array.from(datesSet).filter(Boolean).sort((a,b)=>new Date(a)-new Date(b));
+
+      let runningBalance = bringForwardBalance;
+      const csvRows = [];
+      csvRows.push(shopName);
+      csvRows.push(`Shop Name: ${shopName}`);
+      csvRows.push(`Security Deposit: ${formatNum(securityDeposit)}`);
+      csvRows.push(`Bring Forward Balance: ${formatNum(bringForwardBalance)}`);
+      csvRows.push(`Team Leader: ${teamLeader}`);
+      const headers = ["DATE","DEPOSIT","WITHDRAWAL","IN","OUT","SETTLEMENT","SPECIAL PAYMENT","ADJUSTMENT","SEC DEPOSIT","DP COMM","WD COMM","ADD COMM","BALANCE"];
+      csvRows.push(headers.map(h=>`"${h}"`).join(','));
+
+      for (const date of sortedDates) {
+        const deposits = depositData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName) && r.DATE===date);
+        const withdrawals = withdrawalData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName) && r.DATE===date);
+        const stlmForDate = stlmData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName) && r.DATE===date);
+
+        const depTotal = deposits.reduce((s,r)=>s+parseNum(r.AMOUNT),0);
+        const wdTotal = withdrawals.reduce((s,r)=>s+parseNum(r.AMOUNT),0);
+        const sumMode = mode => stlmForDate.filter(r=>normalizeStr(r.MODE)===mode).reduce((s,r)=>s+parseNum(r.AMOUNT),0);
+        const inAmt = sumMode("IN");
+        const outAmt = sumMode("OUT");
+        const settlement = sumMode("SETTLEMENT");
+        const specialPay = sumMode("SPECIAL PAYMENT");
+        const adjustment = sumMode("ADJUSTMENT");
+        const secDep = sumMode("SECURITY DEPOSIT");
+        const dpComm = depTotal*dpCommRate/100;
+        const wdComm = wdTotal*wdCommRate/100;
+        const addComm = depTotal*addCommRate/100;
+
+        runningBalance += depTotal - wdTotal + inAmt - outAmt - settlement - specialPay + adjustment - dpComm - wdComm - addComm;
+
+        csvRows.push([
+          date,
+          formatNum(depTotal),
+          formatNum(wdTotal),
+          formatNum(inAmt),
+          formatNum(outAmt),
+          formatNum(settlement),
+          formatNum(specialPay),
+          formatNum(adjustment),
+          formatNum(secDep),
+          formatNum(dpComm),
+          formatNum(wdComm),
+          formatNum(addComm),
+          formatNum(runningBalance)
+        ].map(v=>`"${v}"`).join(','));
+      }
+
+      csvRows.push(["TOTAL","","","","","","","","","","","",formatNum(runningBalance)].map(v=>`"${v}"`).join(','));
+
+      const folder = zip.folder(teamLeader);
+      folder.file(`${shopName}.csv`, csvRows.join('\n'));
+    }
+
+    const content = await zip.generateAsync({type:"blob"});
+    saveAs(content, `All_Shops_Summary_${new Date().toISOString().slice(0,10)}.zip`);
+  } catch(err){
+    console.error(err);
+    alert("⚠️ Failed to generate ZIP: "+err.message);
+  }
+}
 
 /* -------------------------
-   Init Dashboard (wrap previous DOMContentLoaded logic)
+   Init Dashboard
    ------------------------- */
 async function initDashboard() {
   try {
@@ -206,20 +301,18 @@ async function initDashboard() {
     buildGroupDropdown(rawData);
     buildSummary(rawData);
 
-    // Auto-filter + absolute lock if ?teamLeader present
     const params = new URLSearchParams(window.location.search);
     const leaderParam = (params.get("teamLeader") || "").toUpperCase();
     if (leaderParam) {
       const leaderSelect = document.getElementById("leaderFilter");
       if (leaderSelect) {
         leaderSelect.value = leaderParam;
-        leaderSelect.disabled = true; // 🔒 absolute filter
+        leaderSelect.disabled = true;
         buildGroupDropdown(rawData, leaderParam);
         filterData();
       }
     }
 
-    // wire up UI
     const leaderFilter = document.getElementById("leaderFilter");
     const groupFilter = document.getElementById("groupFilter");
     const searchInput = document.getElementById("searchInput");
