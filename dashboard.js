@@ -192,7 +192,7 @@ function exportCSV() {
 }
 
 /* -------------------------
-   ZIP Download (updated to match dashboard figures)
+   ZIP Download (corrected)
    ------------------------- */
 async function downloadAllShops() {
   if (!cachedData.length) { alert("No shop data available"); return; }
@@ -223,7 +223,6 @@ async function downloadAllShops() {
       const wdCommRate = parseNum(commRow?.["WD COMM"]);
       const addCommRate = parseNum(commRow?.["ADD COMM"]);
 
-      // Unique sorted dates
       const datesSet = new Set([
         ...depositData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName)).map(r=>r.DATE),
         ...withdrawalData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName)).map(r=>r.DATE),
@@ -233,17 +232,14 @@ async function downloadAllShops() {
 
       let runningBalance = bringForwardBalance;
       const csvRows = [];
-
       csvRows.push(shopName);
       csvRows.push(`Shop Name: ${shopName}`);
       csvRows.push(`Security Deposit: ${formatNum(securityDeposit)}`);
       csvRows.push(`Bring Forward Balance: ${formatNum(bringForwardBalance)}`);
       csvRows.push(`Team Leader: ${teamLeader}`);
-
       const headers = ["DATE","DEPOSIT","WITHDRAWAL","IN","OUT","SETTLEMENT","SPECIAL PAYMENT","ADJUSTMENT","SEC DEPOSIT","DP COMM","WD COMM","ADD COMM","BALANCE"];
       csvRows.push(headers.map(h=>`"${h}"`).join(','));
 
-      // B/F Balance row
       if (bringForwardBalance) {
         csvRows.push([ "B/F Balance", 0,0,0,0,0,0,0,0,0,0,0, formatNum(runningBalance) ].map(v=>`"${v}"`).join(','));
       }
@@ -262,7 +258,6 @@ async function downloadAllShops() {
         const specialPay = sumMode("SPECIAL PAYMENT");
         const adjustment = sumMode("ADJUSTMENT");
         const secDep = sumMode("SECURITY DEPOSIT");
-
         const dpComm = depTotal*dpCommRate/100;
         const wdComm = wdTotal*wdCommRate/100;
         const addComm = depTotal*addCommRate/100;
