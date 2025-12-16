@@ -192,20 +192,20 @@ function exportCSV() {
 }
 
 /* -------------------------
-   ZIP Download
+   ZIP Download (corrected)
    ------------------------- */
 async function downloadAllShops() {
   if (!cachedData.length) { alert("No shop data available"); return; }
 
   const zip = new JSZip();
   try {
-    // Fetch all sheets
+    // Fetch raw sheets
     const [depositData, withdrawalData, stlmData, commData, shopBalanceData] = await Promise.all([
-      fetch(OPENSHEET.DEPOSIT).then(r=>r.json()),
-      fetch(OPENSHEET.WITHDRAWAL).then(r=>r.json()),
-      fetch(OPENSHEET.STLM).then(r=>r.json()),
-      fetch(OPENSHEET.COMM).then(r=>r.json()),
-      fetch(OPENSHEET.SHOPS_BALANCE).then(r=>r.json())
+      fetch(OPENSHEET.DEPOSIT).then(r => r.json()),
+      fetch(OPENSHEET.WITHDRAWAL).then(r => r.json()),
+      fetch(OPENSHEET.STLM).then(r => r.json()),
+      fetch(OPENSHEET.COMM).then(r => r.json()),
+      fetch(OPENSHEET.SHOPS_BALANCE).then(r => r.json())
     ]);
 
     const normalizeStr = str => (str||"").trim().toUpperCase();
@@ -215,13 +215,14 @@ async function downloadAllShops() {
     for (const shop of cachedData) {
       const shopName = shop["SHOP NAME"];
       const teamLeader = shop["TEAM LEADER"] || "Unknown";
-      const shopRow = shopBalanceData.find(r => normalizeStr(r["SHOP"])===normalizeStr(shopName));
-      const bringForwardBalance = parseNum(shopRow?.["BRING FORWARD BALANCE"]);
-      const securityDeposit = parseNum(shopRow?.["SECURITY DEPOSIT"]);
 
-      const dpCommRate = parseNum(commData.find(r=>normalizeStr(r.SHOP)===normalizeStr(shopName))?.["DP COMM"]);
-      const wdCommRate = parseNum(commData.find(r=>normalizeStr(r.SHOP)===normalizeStr(shopName))?.["WD COMM"]);
-      const addCommRate = parseNum(commData.find(r=>normalizeStr(r.SHOP)===normalizeStr(shopName))?.["ADD COMM"]);
+      // Get summary from cachedData to ensure figures match dashboard
+      const shopSummary = cachedData.find(s => s["SHOP NAME"] === shopName);
+      const bringForwardBalance = parseNum(shopSummary["BRING FORWARD BALANCE"]);
+      const securityDeposit = parseNum(shopSummary["SECURITY DEPOSIT"]);
+      const dpCommRate = parseNum(shopSummary["DP COMM"]);
+      const wdCommRate = parseNum(shopSummary["WD COMM"]);
+      const addCommRate = parseNum(shopSummary["ADD COMM"]);
 
       const datesSet = new Set([
         ...depositData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName)).map(r=>r.DATE),
@@ -232,13 +233,13 @@ async function downloadAllShops() {
 
       let runningBalance = bringForwardBalance;
       const csvRows = [];
+
       csvRows.push(shopName);
       csvRows.push(`Shop Name: ${shopName}`);
       csvRows.push(`Security Deposit: ${formatNum(securityDeposit)}`);
       csvRows.push(`Bring Forward Balance: ${formatNum(bringForwardBalance)}`);
       csvRows.push(`Team Leader: ${teamLeader}`);
-      const headers = ["DATE","DEPOSIT","WITHDRAWAL","IN","OUT","SETTLEMENT","SPECIAL PAYMENT","ADJUSTMENT","SEC DEPOSIT","DP COMM","WD COMM","ADD COMM","BALANCE"];
-      csvRows.push(headers.map(h=>`"${h}"`).join(','));
+      csvRows.push(["DATE","DEPOSIT","WITHDRAWAL","IN","OUT","SETTLEMENT","SPECIAL PAYMENT","ADJUSTMENT","SEC DEPOSIT","DP COMM","WD COMM","ADD COMM","BALANCE"].map(h=>`"${h}"`).join(','));
 
       for (const date of sortedDates) {
         const deposits = depositData.filter(r=>normalizeStr(r.SHOP)===normalizeStr(shopName) && r.DATE===date);
@@ -254,6 +255,7 @@ async function downloadAllShops() {
         const specialPay = sumMode("SPECIAL PAYMENT");
         const adjustment = sumMode("ADJUSTMENT");
         const secDep = sumMode("SECURITY DEPOSIT");
+
         const dpComm = depTotal*dpCommRate/100;
         const wdComm = wdTotal*wdCommRate/100;
         const addComm = depTotal*addCommRate/100;
