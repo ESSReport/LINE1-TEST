@@ -1,5 +1,5 @@
 /* =========================================================
-   DASHBOARD.JS – FINAL PRODUCTION VERSION
+   DASHBOARD.JS – FINAL PRODUCTION VERSION (FIXED)
    ========================================================= */
 
 /* -------------------------
@@ -16,7 +16,7 @@ const SHEETS = {
 };
 
 /* -------------------------
-   Utilities (CRITICAL)
+   Utilities
 ------------------------- */
 const normalizeStr = v => (v || "").toString().trim().toUpperCase();
 
@@ -64,24 +64,49 @@ async function fetchShopsBalance() {
    Build Main Summary Table
 ------------------------- */
 function buildSummary(rows) {
-  cachedData = rows.map(r => ({
-    "SHOP NAME": r["SHOP"],
-    "TEAM LEADER": r["TEAM LEADER"],
-    "GROUP NAME": r["GROUP NAME"],
-    "SECURITY DEPOSIT": parseNum(r["SECURITY DEPOSIT"]),
-    "BRING FORWARD BALANCE": parseNum(r["BRING FORWARD BALANCE"]),
-    "TOTAL DEPOSIT": parseNum(r["TOTAL DEPOSIT"]),
-    "TOTAL WITHDRAWAL": parseNum(r["TOTAL WITHDRAWAL"]),
-    "INTERNAL TRANSFER IN": parseNum(r["INTERNAL TRANSFER IN"]),
-    "INTERNAL TRANSFER OUT": parseNum(r["INTERNAL TRANSFER OUT"]),
-    "SETTLEMENT": parseNum(r["SETTLEMENT"]),
-    "SPECIAL PAYMENT": parseNum(r["SPECIAL PAYMENT"]),
-    "ADJUSTMENT": parseNum(r["ADJUSTMENT"]),
-    "DP COMM": parseNum(r["DP COMM"]),
-    "WD COMM": parseNum(r["WD COMM"]),
-    "ADD COMM": parseNum(r["ADD COMM"]),
-    "RUNNING BALANCE": parseNum(r["OPENING BALANCE"])
-  }));
+  cachedData = rows.map(r => {
+    const bf = parseNum(r["BRING FORWARD BALANCE"]);
+    const totalDeposit = parseNum(r["TOTAL DEPOSIT"]);
+    const totalWithdrawal = parseNum(r["TOTAL WITHDRAWAL"]);
+    const inTransfer = parseNum(r["INTERNAL TRANSFER IN"]);
+    const outTransfer = parseNum(r["INTERNAL TRANSFER OUT"]);
+    const settlement = parseNum(r["SETTLEMENT"]);
+    const special = parseNum(r["SPECIAL PAYMENT"]);
+    const adjustment = parseNum(r["ADJUSTMENT"]);
+    const dpComm = parseNum(r["DP COMM"]);
+    const wdComm = parseNum(r["WD COMM"]);
+    const addComm = parseNum(r["ADD COMM"]);
+
+    return {
+      "SHOP NAME": r["SHOP"],
+      "TEAM LEADER": r["TEAM LEADER"],
+      "GROUP NAME": r["GROUP NAME"],
+      "SECURITY DEPOSIT": parseNum(r["SECURITY DEPOSIT"]),
+      "BRING FORWARD BALANCE": bf,
+      "TOTAL DEPOSIT": totalDeposit,
+      "TOTAL WITHDRAWAL": totalWithdrawal,
+      "INTERNAL TRANSFER IN": inTransfer,
+      "INTERNAL TRANSFER OUT": outTransfer,
+      "SETTLEMENT": settlement,
+      "SPECIAL PAYMENT": special,
+      "ADJUSTMENT": adjustment,
+      "DP COMM": dpComm,
+      "WD COMM": wdComm,
+      "ADD COMM": addComm,
+      "RUNNING_BALANCE":
+        bf +
+        totalDeposit -
+        totalWithdrawal +
+        inTransfer -
+        outTransfer -
+        settlement -
+        special +
+        adjustment -
+        dpComm -
+        wdComm -
+        addComm
+    };
+  });
 
   renderTable();
 }
@@ -112,14 +137,14 @@ function renderTable() {
       <td>${formatNum(r["DP COMM"])}</td>
       <td>${formatNum(r["WD COMM"])}</td>
       <td>${formatNum(r["ADD COMM"])}</td>
-      <td>${formatNum(r["RUNNING BALANCE"])}</td>
+      <td>${formatNum(r["RUNNING_BALANCE"])}</td>
     `;
     body.appendChild(tr);
   });
 }
 
 /* =========================================================
-   ZIP DOWNLOAD — EXACT SHOP DASHBOARD LOGIC
+   ZIP DOWNLOAD — FIXED
    ========================================================= */
 async function downloadAllShops() {
   if (!cachedData.length) {
@@ -154,20 +179,20 @@ async function downloadAllShops() {
       const shopName = shop["SHOP NAME"];
       const nShop = normalizeStr(shopName);
 
-      const balRow = shopBalance.find(r => r["SHOP"] === nShop);
+      const balRow = shopBalance.find(r => normalizeStr(r["SHOP"]) === nShop);
       const bfBalance = parseNum(balRow?.["BRING FORWARD BALANCE"]);
       const secDeposit = parseNum(balRow?.["SECURITY DEPOSIT"]);
       const teamLeader = balRow?.["TEAM LEADER"] || "UNKNOWN";
 
-      const commRow = comm.find(r => r["SHOP"] === nShop);
+      const commRow = comm.find(r => normalizeStr(r["SHOP"]) === nShop);
       const dpRate = parseNum(commRow?.["DP COMM"]);
       const wdRate = parseNum(commRow?.["WD COMM"]);
       const addRate = parseNum(commRow?.["ADD COMM"]);
 
       const dates = new Set([
-        ...deposit.filter(r => r["SHOP"] === nShop).map(r => r["DATE"]),
-        ...withdrawal.filter(r => r["SHOP"] === nShop).map(r => r["DATE"]),
-        ...stlm.filter(r => r["SHOP"] === nShop).map(r => r["DATE"])
+        ...deposit.filter(r => normalizeStr(r["SHOP"]) === nShop).map(r => r["DATE"]),
+        ...withdrawal.filter(r => normalizeStr(r["SHOP"]) === nShop).map(r => r["DATE"]),
+        ...stlm.filter(r => normalizeStr(r["SHOP"]) === nShop).map(r => r["DATE"])
       ]);
 
       const sortedDates = [...dates].filter(Boolean).sort(
@@ -192,9 +217,9 @@ async function downloadAllShops() {
       );
 
       for (const date of sortedDates) {
-        const dep = deposit.filter(r => r["SHOP"] === nShop && r["DATE"] === date);
-        const wd = withdrawal.filter(r => r["SHOP"] === nShop && r["DATE"] === date);
-        const st = stlm.filter(r => r["SHOP"] === nShop && r["DATE"] === date);
+        const dep = deposit.filter(r => normalizeStr(r["SHOP"]) === nShop && r["DATE"] === date);
+        const wd = withdrawal.filter(r => normalizeStr(r["SHOP"]) === nShop && r["DATE"] === date);
+        const st = stlm.filter(r => normalizeStr(r["SHOP"]) === nShop && r["DATE"] === date);
 
         const depTotal = dep.reduce((s, r) => s + parseNum(r["AMOUNT"]), 0);
         const wdTotal = wd.reduce((s, r) => s + parseNum(r["AMOUNT"]), 0);
@@ -226,7 +251,7 @@ async function downloadAllShops() {
         );
       }
 
-      rows.push(`"TOTAL","","","","","","","","","","","", "${formatNum(runningBalance)}"`);
+      rows.push(`"TOTAL",${Array(12).fill('""').join(",")},"${formatNum(runningBalance)}"`);
 
       zip.folder(teamLeader).file(`${shopName}.csv`, rows.join("\n"));
     }
@@ -236,7 +261,7 @@ async function downloadAllShops() {
 
   } catch (err) {
     console.error(err);
-    alert("ZIP generation failed");
+    alert("ZIP generation failed: " + err.message);
   }
 }
 
