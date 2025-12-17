@@ -24,12 +24,6 @@ const parseNumber = v => {
   const n = Number(s);
   return isFinite(n) ? n : 0;
 };
-const parseCommRate = v => {
-  if (!v) return 0;
-  const s = String(v).replace("%","").trim();
-  const n = parseFloat(s);
-  return isFinite(n) ? n : 0;
-};
 const normalize = row => {
   const out = {};
   for (const k in row) out[cleanKey(k)] = String(row[k]||"").trim();
@@ -198,7 +192,7 @@ function exportCSV() {
 }
 
 /* -------------------------
-   ZIP Download (shop_dashboard.js logic)
+   ZIP Download (fully corrected)
    ------------------------- */
 async function downloadAllShops() {
   if (!cachedData.length) { alert("No shop data available"); return; }
@@ -227,9 +221,9 @@ async function downloadAllShops() {
       const securityDeposit = parseNum(shopRow?.["SECURITY DEPOSIT"]);
 
       const tlRow = commData.find(r => normalizeStr(r.SHOP) === normalizedShop);
-      const dpCommRate = parseCommRate(tlRow?.["DP COMM"]);
-      const wdCommRate = parseCommRate(tlRow?.["WD COMM"]);
-      const addCommRate = parseCommRate(tlRow?.["ADD COMM"]);
+      const dpCommRate = parseNum(tlRow?.["DP COMM"]);
+      const wdCommRate = parseNum(tlRow?.["WD COMM"]);
+      const addCommRate = parseNum(tlRow?.["ADD COMM"]);
 
       const datesSet = new Set([
         ...depositData.filter(r=>normalizeStr(r.SHOP)===normalizedShop).map(r=>r.DATE),
@@ -238,9 +232,10 @@ async function downloadAllShops() {
       ]);
       const sortedDates = Array.from(datesSet).filter(Boolean).sort((a,b)=>new Date(a)-new Date(b));
 
-      let runningBalance = bringForwardBalance;
+      let runningBalance = bringForwardBalance || 0;
       const csvRows = [];
 
+      // Header info
       csvRows.push(shopName);
       csvRows.push(`Shop Name: ${shopName}`);
       csvRows.push(`Security Deposit: ${formatNum(securityDeposit)}`);
@@ -250,10 +245,12 @@ async function downloadAllShops() {
       const headers = ["DATE","DEPOSIT","WITHDRAWAL","IN","OUT","SETTLEMENT","SPECIAL PAYMENT","ADJUSTMENT","SEC DEPOSIT","DP COMM","WD COMM","ADD COMM","BALANCE"];
       csvRows.push(headers.map(h=>`"${h}"`).join(','));
 
-      if (bringForwardBalance) {
-        csvRows.push(['B/F Balance','0.00','0.00','0.00','0.00','0.00','0.00','0.00','0.00','0.00','0.00','0.00',formatNum(runningBalance)].map(v=>`"${v}"`).join(','));
-      }
+      // Inject B/F Balance as first row
+      csvRows.push([
+        "B/F Balance",0,0,0,0,0,0,0,0,0,0,0, formatNum(runningBalance)
+      ].map(v=>`"${v}"`).join(','));
 
+      // Daily transactions
       for (const date of sortedDates) {
         const deposits = depositData.filter(r=>normalizeStr(r.SHOP)===normalizedShop && r.DATE===date);
         const withdrawals = withdrawalData.filter(r=>normalizeStr(r.SHOP)===normalizedShop && r.DATE===date);
@@ -293,7 +290,16 @@ async function downloadAllShops() {
         ].map(v=>`"${v}"`).join(','));
       }
 
-      csvRows.push(["TOTAL","","","","","","","","","","","",formatNum(runningBalance)].map(v=>`"${v}"`).join(','));
+      // TOTAL row
+      csvRows.push([
+        "TOTAL",
+        formatNum(depositData.filter(r=>normalizeStr(r.SHOP)===normalizedShop).reduce((s,r)=>s+parseNum(r.AMOUNT),0)),
+        formatNum(withdrawalData.filter(r=>normalizeStr(r.SHOP)===normalizedShop).reduce((s,r)=>s+parseNum(r.AMOUNT),0)),
+        "", "", 
+        formatNum(stlmData.filter(r=>normalizeStr(r.SHOP)===normalizedShop).reduce((s,r)=>s+parseNum(r.AMOUNT),0)), 
+        "", "", "", "", "", "", 
+        formatNum(runningBalance)
+      ].map(v=>`"${v}"`).join(','));
 
       const folder = zip.folder(teamLeader);
       folder.file(`${shopName}.csv`, csvRows.join('\n'));
@@ -351,6 +357,3 @@ async function initDashboard() {
     alert("Failed to load data.");
   }
 }
-
-// Initialize on load
-initDashboard();
