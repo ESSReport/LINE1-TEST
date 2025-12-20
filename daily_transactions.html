@@ -3,41 +3,143 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Daily Transaction Dashboard</title>
+<title>Transaction Dashboard</title>
+
 <style>
-body { font-family: Arial, sans-serif; padding: 20px; }
-.filter-card { margin-bottom: 20px; }
-.filter-card label { margin-right: 10px; }
-#loadingSpinner { display: none; margin-top: 20px; font-weight: bold; }
-.dashboard-bar { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
-.bar { padding: 10px; background-color: #4CAF50; color: white; flex: 1; text-align: center; border-radius: 5px; }
-.backup-list { margin-top: 20px; }
-.backup-btn { margin: 3px; padding: 6px 12px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; }
-.backup-btn:hover { background-color: #1976D2; }
+:root {
+    --deposit: #2e7d32;
+    --withdraw: #c62828;
+    --bg: #f4f6f8;
+}
+
+body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    margin: 0;
+    padding: 16px;
+    background: var(--bg);
+}
+
+h1 {
+    font-size: 20px;
+    margin-bottom: 16px;
+}
+
+.summary {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+@media (min-width: 600px) {
+    .summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.summary-card {
+    background: white;
+    padding: 14px;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    text-align: center;
+}
+
+.summary-card h2 {
+    font-size: 12px;
+    color: #777;
+    margin: 0;
+}
+
+.summary-card p {
+    margin: 6px 0 0;
+    font-size: 22px;
+    font-weight: 600;
+}
+
+.deposit-text { color: var(--deposit); }
+.withdraw-text { color: var(--withdraw); }
+
+.section {
+    margin-bottom: 28px;
+}
+
+.date-block {
+    background: white;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+}
+
+.date-block h3 {
+    font-size: 14px;
+    margin: 0 0 8px;
+    color: #333;
+}
+
+.wallet-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 14px;
+    border-bottom: 1px solid #eee;
+}
+
+.wallet-row:last-child {
+    border-bottom: none;
+}
+
+.amount.deposit { color: var(--deposit); }
+.amount.withdrawal { color: var(--withdraw); }
+
+.csv-link {
+    display: block;
+    margin-top: 30px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.csv-link a {
+    color: #1565c0;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.csv-link a:hover {
+    text-decoration: underline;
+}
+
+#loadingSpinner {
+    font-weight: 600;
+    margin-bottom: 16px;
+}
 </style>
+
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
+
 <body>
 
-<h1 id="dashboardTitle">Daily Transaction Dashboard</h1>
+<h1 id="dashboardTitle">Transaction Dashboard</h1>
 
-<div class="filter-card">
-  <label>Date: <input type="date" id="dateFilter"></label>
-  <label>Wallet:
-    <select id="walletFilter"><option value="All">All</option></select>
-  </label>
-  <label>Type:
-    <select id="typeFilter"><option value="All">All</option></select>
-  </label>
-  <button id="resetBtn">Reset Filters</button>
-  <button id="exportBtn">💾 Export CSV</button>
+<div id="loadingSpinner">Loading…</div>
+
+<div id="summary" class="summary"></div>
+
+<div id="dashboardBars"></div>
+
+<div class="csv-link">
+    <a href="#" id="csvDownloadLink">⬇ Download XLSX for this shop</a>
 </div>
 
-<div id="loadingSpinner">Loading...</div>
-<div id="dashboardBars" class="dashboard-bar"></div>
-
-<h2>Previous Data</h2>
-<div id="backupList" class="backup-list">Loading backups...</div>
+<!-- Backup Section -->
+<div id="backupSection" class="csv-link">
+    <h3>Backup Data</h3>
+    <div id="backupList">Loading backup links…</div>
+</div>
 
 <script src="daily_transactions.js"></script>
+<script src="backup_links.js"></script>
 </body>
 </html>
