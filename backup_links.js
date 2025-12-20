@@ -4,6 +4,7 @@
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby9cDHe1_Cy4tmldSWYHJZDi26pxYaHUTB6Wlu0XYigQJpiYbybUUmuxECtReKwqbdt/exec";
 const BACKUP_INDEX_URL = "https://opensheet.elk.sh/19eCfiWh46hQUqyAwcpx4OD_3nPFDVK1p1BYbcncMT4M/Backup_Index";
 const SHOP_NAME = new URLSearchParams(window.location.search).get("shopName") || "";
+
 function normalizeShop(name) { return (name||"").trim().toUpperCase(); }
 
 const backupList = document.getElementById("backupList");
@@ -18,7 +19,7 @@ async function loadBackupLinks() {
         if(!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
-        // Keep backups with valid Date & FileId, sort by newest
+        // Filter backups with valid Date & FileId, latest 7 only
         const backups = data
             .filter(b => b.Date && b.FileId)
             .sort((a,b)=>b.Date.localeCompare(a.Date))
@@ -39,8 +40,8 @@ async function loadBackupLinks() {
                 link.textContent = `⬇ Download XLSX for ${b.Date} (loading…)`;
 
                 try {
-                    // Call Web App to fetch filtered data
-                    const url = `${WEB_APP_URL}?fileId=${b.FileId}&shopName=${SHOP_NAME}`;
+                    // Call Web App to fetch only current shop’s data
+                    const url = `${WEB_APP_URL}?fileId=${b.FileId}&shopName=${normalizeShop(SHOP_NAME)}`;
                     const response = await fetch(url);
                     const json = await response.json();
 
@@ -68,7 +69,7 @@ async function loadBackupLinks() {
 }
 
 // ------------------------------
-// Generate XLSX from DP & WD
+// Generate XLSX from DP & WD data
 function generateXLSX({ dp, wd }, date) {
     if(!dp.length && !wd.length) return alert("No data for this backup.");
 
