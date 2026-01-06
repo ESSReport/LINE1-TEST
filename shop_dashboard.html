@@ -47,15 +47,15 @@
     /* Wallet Summary Styles */
     .wallet-summary { margin-top: 30px; }
     .wallet-summary h2 { margin-bottom: 15px; }
-    .wallet-cards { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 20px; }
+    .wallet-cards { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 10px; }
     .wallet-card { background: #fff; border-radius: 8px; padding: 15px; flex: 1; min-width: 200px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
     .wallet-card h3 { margin-top: 0; color: #0077cc; font-size: 1rem; }
+    .wallet-card h4 { margin-top: 0; font-size: 0.95rem; color: #333; }
     .wallet-card p { font-size: 1.2rem; margin: 5px 0; font-weight: bold; }
-    .wallet-breakdown { margin-top: 10px; }
-    .wallet-breakdown-date { margin-bottom: 10px; }
-    .wallet-breakdown-date h4 { margin: 5px 0; font-size: 0.95rem; color: #333; }
-    .wallet-breakdown-date ul { list-style: none; padding-left: 15px; margin: 0; }
-    .wallet-breakdown-date ul li { margin: 2px 0; }
+    .wallet-card ul { list-style: none; padding-left: 15px; margin: 0; }
+    .wallet-card ul li { margin: 2px 0; }
+    #walletDownload { margin-top: 10px; }
+    #walletDownload a { color: #0077cc; cursor: pointer; text-decoration: underline; }
 
     @media (max-width: 768px) {
       .shop-info { flex-direction: column; align-items: flex-start; }
@@ -109,6 +109,9 @@
   <div class="wallet-summary" id="walletSummary">
     <h2>Wallet Summary - <span id="walletShopName">-</span></h2>
     <div class="wallet-cards" id="walletCards"></div>
+    <div id="walletDownload">
+      <a href="#" id="downloadWalletBtn">⬇ Download Wallet Summary details here!</a>
+    </div>
   </div>
 
   <script src="auth.js"></script>
