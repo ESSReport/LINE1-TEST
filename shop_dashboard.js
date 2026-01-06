@@ -29,21 +29,9 @@ function parseNumber(v) {
   const n = parseFloat(s);
   return isFinite(n) ? n : 0;
 }
-
-function formatNumber(v) {
-  return v !== undefined ? v.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "0.00";
-}
-
-function normalizeString(str) {
-  return (str || "").trim().replace(/\s+/g, " ").toUpperCase();
-}
-
-async function fetchSheet(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
+function formatNumber(v) { return v !== undefined ? v.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "0.00"; }
+function normalizeString(str) { return (str || "").trim().replace(/\s+/g, " ").toUpperCase(); }
+async function fetchSheet(url) { const res = await fetch(url); if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); }
 function rTrim(v){ return String(v||"").trim(); }
 
 // ------------------------------
@@ -72,7 +60,6 @@ async function loadData() {
     const securityDeposit = parseNumber(shopRow ? rTrim(shopRow["SECURITY DEPOSIT"]) : 0);
     const teamLeader = shopRow ? rTrim(shopRow["TEAM LEADER"]) : "-";
 
-    // PIN verification
     if (typeof window.checkTLAccess !== "function") throw new Error("auth.js not loaded");
     await window.checkTLAccess(teamLeader);
 
@@ -196,15 +183,15 @@ function renderWalletSummary(walletDP, walletWD, normalizedShop) {
 
   const totals = { auto: 0, manual: 0, withdrawal: 0 };
 
-  dpShop.forEach(r => { totals[r.Type.toLowerCase()] += parseNumber(r.Amount); });
+  dpShop.forEach(r => { totals[r.Type.trim().toLowerCase()] += parseNumber(r.Amount); });
   wdShop.forEach(r => totals.withdrawal += parseNumber(r.Amount));
 
+  // Top-level cards
   const cardInfo = [
     { title: "Total Deposit (Auto)", amount: totals.auto },
     { title: "Total Deposit (Manual)", amount: totals.manual },
     { title: "Total Withdrawal", amount: totals.withdrawal }
   ];
-
   cardInfo.forEach(c => {
     const div = document.createElement("div");
     div.className = "wallet-card";
@@ -212,10 +199,11 @@ function renderWalletSummary(walletDP, walletWD, normalizedShop) {
     walletCards.appendChild(div);
   });
 
-  // Breakdown by Date
+  // Date-wise breakdown
   const createDateCard = (title, walletAmounts) => {
     const div = document.createElement("div");
     div.className = "wallet-card";
+    div.style.background = "#fefefe";
     div.innerHTML = `<h4>${title}</h4>`;
     const ul = document.createElement("ul");
     for (const w in walletAmounts) {
@@ -244,10 +232,33 @@ function renderWalletSummary(walletDP, walletWD, normalizedShop) {
     wallets.forEach(r => { walletSums[r.Wallet.trim()] = (walletSums[r.Wallet.trim()]||0)+parseNumber(r.Amount); });
     createDateCard(`Withdrawal - ${date}`, walletSums);
   });
+
+  // ------------------------------
+  // Wallet Summary Download
+  // ------------------------------
+  document.getElementById("downloadWalletBtn").addEventListener("click", () => {
+    const allData = [...dpShop, ...wdShop];
+    const columns = ["Wallet","Reference","Amount","Date","Type","Shop Name"];
+    const csvRows = [columns.join(",")];
+    allData.forEach(r => {
+      const row = columns.map(col => `"${(r[col]||"").toString().replace(/"/g,'""')}"`);
+      csvRows.push(row.join(","));
+    });
+    const csvString = csvRows.join("\n");
+    const blob = new Blob([csvString], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${shopName}_wallet_summary.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
 }
 
 // ------------------------------
-// CSV Download
+// CSV Download Function
 // ------------------------------
 function downloadTableAsCSV(filename = 'daily_transactions.csv') {
   const rows = document.querySelectorAll('#transactionTable tbody tr, #transactionTable tfoot tr');
