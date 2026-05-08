@@ -7,7 +7,10 @@
 
   <!-- Auth first -->
   <script src="auth.js" defer></script>
-<script src="dashboard.js" defer></script>
+  <script src="dashboard.js" defer></script>
+
+  <!-- ✅ ADDED: SheetJS for Excel generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <style>
     body { font-family:"Segoe UI",sans-serif; background:#f6f8fa; padding:20px; }
@@ -57,7 +60,6 @@
   <script>
 (async () => {
   try {
-    // Wait for DOM first
     if (document.readyState === "loading") {
       await new Promise(resolve =>
         document.addEventListener("DOMContentLoaded", resolve, { once: true })
@@ -79,7 +81,6 @@
       await window.requireAdmin();
     }
 
-    // ✅ SAFE: DOM ready + PIN validated
     await initDashboard();
 
   } catch (e) {
@@ -91,5 +92,6 @@
   }
 })();
 </script>
+
 </body>
 </html>
