@@ -221,8 +221,8 @@ async function downloadAllShops() {
       fetch(OPENSHEET.STLM).then(r => r.json()),
       fetch(OPENSHEET.COMM).then(r => r.json()),
       fetch(OPENSHEET.SHOPS_BALANCE).then(r => r.json()),
-      fetch(SHEETS.WALLET_DP).then(r => r.json()),
-      fetch(SHEETS.WALLET_WD).then(r => r.json())
+    fetch("https://opensheet.elk.sh/19eCfiWh46hQUqyAwcpx4OD_3nPFDVK1p1BYbcncMT4M/DP").then(r => r.json()),
+fetch("https://opensheet.elk.sh/19eCfiWh46hQUqyAwcpx4OD_3nPFDVK1p1BYbcncMT4M/WD").then(r => r.json())
     ]);
 
     const shopBalanceData = shopBalanceDataRaw.map(normalize);
