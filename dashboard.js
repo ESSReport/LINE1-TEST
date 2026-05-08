@@ -221,163 +221,156 @@ async function downloadAllShops() {
       fetch(OPENSHEET.STLM).then(r => r.json()),
       fetch(OPENSHEET.COMM).then(r => r.json()),
       fetch(OPENSHEET.SHOPS_BALANCE).then(r => r.json()),
-      fetch(OPENSHEET.WALLET_DP).then(r => r.json()),
-      fetch(OPENSHEET.WALLET_WD).then(r => r.json())
+      fetch(SHEETS.WALLET_DP).then(r => r.json()),
+      fetch(SHEETS.WALLET_WD).then(r => r.json())
     ]);
 
-    const normalizeStr = str => (str || "").trim().toUpperCase();
+    const shopBalanceData = shopBalanceDataRaw.map(normalize);
+    const commData = commDataRaw.map(normalize);
 
-    const parseNum = v => {
+    const norm = s => (s || "").trim().toUpperCase();
+    const num = v => {
       if (!v) return 0;
       const s = String(v).replace(/,/g, "").replace(/\((.*)\)/, "-$1").trim();
       return Number(s) || 0;
     };
+    const comm = v => parseFloat(String(v || "").replace("%", "")) || 0;
 
-    const formatNum = v =>
-      (v || 0).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      });
-
-    const commData = commDataRaw.map(normalize);
-    const shopBalanceData = shopBalanceDataRaw.map(normalize);
-
+    // =========================
+    // LOOP EACH SHOP
+    // =========================
     for (const shop of filteredData) {
       const shopName = shop["SHOP NAME"];
-      const normalizedShop = normalizeStr(shopName);
-      const teamLeader = shop["TEAM LEADER"] || "Unknown";
+      const shopKey = norm(shopName);
+      const leader = shop["TEAM LEADER"] || "Unknown";
 
-      const shopRow = shopBalanceData.find(
-        r => normalizeStr(r["SHOP"]) === normalizedShop
-      );
+      // -------------------------
+      // SHOP INFO
+      // -------------------------
+      const shopRow = shopBalanceData.find(r => norm(r["SHOP"]) === shopKey);
+      const bf = num(shopRow?.["BRING FORWARD BALANCE"] || 0);
 
-      const bringForwardBalance =
-        parseNum(shopRow?.["BRING FORWARD BALANCE"] || shopRow?.["OPENING BALANCE"] || 0);
+      const commRow = commData.find(r => norm(r["SHOP"]) === shopKey);
+      const dpRate = comm(commRow?.["DP COMM"]);
+      const wdRate = comm(commRow?.["WD COMM"]);
+      const addRate = comm(commRow?.["ADD COMM"]);
 
-      const securityDeposit = parseNum(shopRow?.["SECURITY DEPOSIT"] || 0);
+      // =========================
+      // TRANSACTIONS SHEET
+      // =========================
+      const dates = [...new Set([
+        ...depositData.filter(r => norm(r.SHOP) === shopKey).map(r => r.DATE),
+        ...withdrawalData.filter(r => norm(r.SHOP) === shopKey).map(r => r.DATE),
+        ...stlmData.filter(r => norm(r.SHOP) === shopKey).map(r => r.DATE)
+      ])].filter(Boolean).sort((a, b) => new Date(a) - new Date(b));
 
-      const commRow = commData.find(
-        r => normalizeStr(r["SHOP"]) === normalizedShop
-      );
+      let balance = bf;
 
-      const dpCommRate = parseFloat(commRow?.["DP COMM"] || 0);
-      const wdCommRate = parseFloat(commRow?.["WD COMM"] || 0);
-      const addCommRate = parseFloat(commRow?.["ADD COMM"] || 0);
+      const txSheet = [
+        ["DATE","DEPOSIT","WITHDRAWAL","IN","OUT","SETTLEMENT","ADJUSTMENT","DP COMM","WD COMM","ADD COMM","BALANCE"],
+        ["B/F",0,0,0,0,0,0,0,0,0,balance]
+      ];
 
-      // ✅ WALLET FILTER
-      const dpWallet = walletDP.filter(
-        r => normalizeStr(r["Shop Name"]) === normalizedShop
-      );
+      for (const d of dates) {
+        const dep = depositData
+          .filter(r => norm(r.SHOP) === shopKey && r.DATE === d)
+          .reduce((s, r) => s + num(r.AMOUNT), 0);
 
-      const wdWallet = walletWD.filter(
-        r => normalizeStr(r["Shop Name"]) === normalizedShop
-      );
+        const wd = withdrawalData
+          .filter(r => norm(r.SHOP) === shopKey && r.DATE === d)
+          .reduce((s, r) => s + num(r.AMOUNT), 0);
 
-      const datesSet = new Set([
-        ...depositData
-          .filter(r => normalizeStr(r.SHOP) === normalizedShop)
-          .map(r => r.DATE),
-        ...withdrawalData
-          .filter(r => normalizeStr(r.SHOP) === normalizedShop)
-          .map(r => r.DATE),
-        ...stlmData
-          .filter(r => normalizeStr(r.SHOP) === normalizedShop)
-          .map(r => r.DATE)
-      ]);
+        const sumMode = m =>
+          stlmData
+            .filter(r => norm(r.SHOP) === shopKey && r.DATE === d && norm(r.MODE) === m)
+            .reduce((s, r) => s + num(r.AMOUNT), 0);
 
-      const sortedDates = Array.from(datesSet)
-        .filter(Boolean)
-        .sort((a, b) => new Date(a) - new Date(b));
+        const inAmt = sumMode("IN");
+        const outAmt = sumMode("OUT");
+        const settlement = sumMode("SETTLEMENT");
+        const adj = sumMode("ADJUSTMENT");
 
-      let runningBalance = bringForwardBalance;
+        const dpComm = dep * dpRate / 100;
+        const wdComm = wd * wdRate / 100;
+        const addComm = dep * addRate / 100;
 
-      // ================= EXCEL WORKBOOK =================
-      const wb = XLSX.utils.book_new();
+        balance += dep - wd + inAmt - outAmt - settlement - adj - dpComm - wdComm - addComm;
 
-      // ---------------- DAILY SHEET ----------------
-      const dailySheet = [];
-
-      dailySheet.push([
-        "DATE","DEPOSIT","WITHDRAWAL","IN","OUT",
-        "SETTLEMENT","SPECIAL PAYMENT","ADJUSTMENT",
-        "SEC DEPOSIT","DP COMM","WD COMM","ADD COMM","BALANCE"
-      ]);
-
-      dailySheet.push([
-        "B/F Balance",0,0,0,0,0,0,0,0,0,0,0,
-        runningBalance
-      ]);
-
-      for (const date of sortedDates) {
-        const deposits = depositData.filter(
-          r => normalizeStr(r.SHOP) === normalizedShop && r.DATE === date
-        );
-
-        const withdrawals = withdrawalData.filter(
-          r => normalizeStr(r.SHOP) === normalizedShop && r.DATE === date
-        );
-
-        const depTotal = deposits.reduce((s, r) => s + parseNum(r.AMOUNT), 0);
-        const wdTotal = withdrawals.reduce((s, r) => s + parseNum(r.AMOUNT), 0);
-
-        runningBalance += depTotal - wdTotal;
-
-        dailySheet.push([
-          date,
-          depTotal,
-          wdTotal,
-          0,0,0,0,0,0,0,0,0,
-          runningBalance
+        txSheet.push([
+          d,
+          dep,
+          wd,
+          inAmt,
+          outAmt,
+          settlement,
+          adj,
+          dpComm,
+          wdComm,
+          addComm,
+          balance
         ]);
       }
 
-      const ws1 = XLSX.utils.aoa_to_sheet(dailySheet);
-      XLSX.utils.book_append_sheet(wb, ws1, "Daily");
+      // =========================
+      // WALLET SHEET
+      // =========================
+      const walletDPShop = walletDP.filter(r => norm(r["Shop Name"]) === shopKey);
+      const walletWDShop = walletWD.filter(r => norm(r["Shop Name"]) === shopKey);
 
-      // ---------------- WALLET SHEET (NEW) ----------------
-      const walletSheet = [["Wallet","Reference","Amount","Date","Type"]];
+      const walletSheet = [
+        ["TYPE","WALLET","AMOUNT","DATE","REFERENCE"]
+      ];
 
-      dpWallet.forEach(r => {
+      walletDPShop.forEach(r => {
         walletSheet.push([
+          "DEPOSIT",
           r.Wallet || "",
-          r.Reference || "",
-          parseNum(r.Amount),
+          num(r.Amount),
           r.Date || "",
-          "DEPOSIT"
+          r.Reference || ""
         ]);
       });
 
-      wdWallet.forEach(r => {
+      walletWDShop.forEach(r => {
         walletSheet.push([
+          "WITHDRAWAL",
           r.Wallet || "",
-          r.Reference || "",
-          parseNum(r.Amount),
+          num(r.Amount),
           r.Date || "",
-          "WITHDRAWAL"
+          r.Reference || ""
         ]);
       });
 
+      // =========================
+      // CREATE EXCEL FILE
+      // =========================
+      const wb = XLSX.utils.book_new();
+
+      const ws1 = XLSX.utils.aoa_to_sheet(txSheet);
       const ws2 = XLSX.utils.aoa_to_sheet(walletSheet);
+
+      XLSX.utils.book_append_sheet(wb, ws1, "Transactions");
       XLSX.utils.book_append_sheet(wb, ws2, "Wallet");
 
-      // ================= ADD TO ZIP =================
       const excelBuffer = XLSX.write(wb, {
         bookType: "xlsx",
         type: "array"
       });
 
-      zip.file(`${shopName}.xlsx`, excelBuffer);
+      const blob = new Blob([excelBuffer], {
+        type: "application/octet-stream"
+      });
+
+      const folder = zip.folder(leader);
+      folder.file(`${shopName}.xlsx`, blob);
     }
 
-    const content = await zip.generateAsync({ type: "blob" });
-    saveAs(
-      content,
-      `All_Shops_Excel_${new Date().toISOString().slice(0,10)}.zip`
-    );
+    const finalZip = await zip.generateAsync({ type: "blob" });
+    saveAs(finalZip, `SHOP_WORKBOOKS_${new Date().toISOString().slice(0,10)}.zip`);
 
   } catch (err) {
     console.error(err);
-    alert("⚠️ Failed to generate ZIP: " + err.message);
+    alert("Failed to generate ZIP: " + err.message);
   }
 }
 
