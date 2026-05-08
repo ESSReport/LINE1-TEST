@@ -20,12 +20,34 @@ const TL_PINS = {
   "ROSE": "364769",
   "JISAN": "104766",
   "AIMAN": "587340",
-  "BERLIN": "933222",
+  "BERLIN": "882271",
   "ALADDIN": "042599",
   "TAPAN": "902398",
   "BADBOY": "632278",
   "JEWEL": "804397",
-  "SUJAN": "532478"
+  "SUJAN": "532478",
+  "KERIO": "859614",
+  "RUHUL": "859752",
+  "RAY": "859833",
+  "TANVIR": "463564",
+  "ISMAIL": "859632",
+  "PALI": "398624",
+  "SAGOR": "637841",
+  "EMON": "865212",
+  "RIDOY": "649467",
+  "RIPAN": "943516",
+  "MIRAAN": "823465",
+  "MONIR": "578416",
+  "SHIK": "521479",
+  "SONCHOY": "812458",
+  "MANTU": "953247",
+  "NIHJUM": "945632",
+  "CHAK": "584124",
+  "LIMON": "584563",
+  "SOHARD": "872564",
+  "JUWEL": "431796",
+  "MOTIN": "726814",
+  "NURNOBY": "247537"
 };
 
 // -------------------------
@@ -64,6 +86,19 @@ window.checkTLAccess = async function(tlName) {
   if (!tlName) throw new Error("Team Leader not specified");
   return await window.requireTeamLeader(tlName);
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
