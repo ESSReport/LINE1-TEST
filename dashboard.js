@@ -199,115 +199,185 @@ function exportCSV() {
    ZIP Download – B/F Balance & COMM
 ------------------------- */
 async function downloadAllShops() {
-  if (!filteredData.length) { alert("No shop data available"); return; }
+  if (!filteredData.length) {
+    alert("No shop data available");
+    return;
+  }
+
   const zip = new JSZip();
 
   try {
-    const [depositData, withdrawalData, stlmData, commDataRaw, shopBalanceDataRaw] = await Promise.all([
-      fetch(OPENSHEET.DEPOSIT).then(r=>r.json()),
-      fetch(OPENSHEET.WITHDRAWAL).then(r=>r.json()),
-      fetch(OPENSHEET.STLM).then(r=>r.json()),
-      fetch(OPENSHEET.COMM).then(r=>r.json()),
-      fetch(OPENSHEET.SHOPS_BALANCE).then(r=>r.json())
+    const [
+      depositData,
+      withdrawalData,
+      stlmData,
+      commDataRaw,
+      shopBalanceDataRaw,
+      walletDP,
+      walletWD
+    ] = await Promise.all([
+      fetch(OPENSHEET.DEPOSIT).then(r => r.json()),
+      fetch(OPENSHEET.WITHDRAWAL).then(r => r.json()),
+      fetch(OPENSHEET.STLM).then(r => r.json()),
+      fetch(OPENSHEET.COMM).then(r => r.json()),
+      fetch(OPENSHEET.SHOPS_BALANCE).then(r => r.json()),
+      fetch(OPENSHEET.WALLET_DP).then(r => r.json()),
+      fetch(OPENSHEET.WALLET_WD).then(r => r.json())
     ]);
 
-    const shopBalanceData = shopBalanceDataRaw.map(normalize);
+    const normalizeStr = str => (str || "").trim().toUpperCase();
+
+    const parseNum = v => {
+      if (!v) return 0;
+      const s = String(v).replace(/,/g, "").replace(/\((.*)\)/, "-$1").trim();
+      return Number(s) || 0;
+    };
+
+    const formatNum = v =>
+      (v || 0).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+
     const commData = commDataRaw.map(normalize);
-    const normalizeStr = str => (str||"").trim().toUpperCase();
-    const parseNum = v => { if (!v) return 0; const s=String(v).replace(/,/g,"").replace(/\((.*)\)/,"-$1").trim(); return Number(s)||0; };
-    const parseComm = v => { if(!v) return 0; return parseFloat(String(v).replace("%",""))||0; };
-    const formatNum = v => (v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+    const shopBalanceData = shopBalanceDataRaw.map(normalize);
 
     for (const shop of filteredData) {
       const shopName = shop["SHOP NAME"];
       const normalizedShop = normalizeStr(shopName);
       const teamLeader = shop["TEAM LEADER"] || "Unknown";
 
-      const shopRow = shopBalanceData.find(r => normalizeStr(r["SHOP"]) === normalizedShop);
-      const bringForwardBalance = parseNum(shopRow?.["BRING FORWARD BALANCE"] || shopRow?.["OPENING BALANCE"] || 0);
+      const shopRow = shopBalanceData.find(
+        r => normalizeStr(r["SHOP"]) === normalizedShop
+      );
+
+      const bringForwardBalance =
+        parseNum(shopRow?.["BRING FORWARD BALANCE"] || shopRow?.["OPENING BALANCE"] || 0);
+
       const securityDeposit = parseNum(shopRow?.["SECURITY DEPOSIT"] || 0);
 
-      const commRow = commData.find(r => normalizeStr(r["SHOP"]) === normalizedShop);
-      const dpCommRate = parseComm(commRow?.["DP COMM"] || 0);
-      const wdCommRate = parseComm(commRow?.["WD COMM"] || 0);
-      const addCommRate = parseComm(commRow?.["ADD COMM"] || 0);
+      const commRow = commData.find(
+        r => normalizeStr(r["SHOP"]) === normalizedShop
+      );
+
+      const dpCommRate = parseFloat(commRow?.["DP COMM"] || 0);
+      const wdCommRate = parseFloat(commRow?.["WD COMM"] || 0);
+      const addCommRate = parseFloat(commRow?.["ADD COMM"] || 0);
+
+      // ✅ WALLET FILTER
+      const dpWallet = walletDP.filter(
+        r => normalizeStr(r["Shop Name"]) === normalizedShop
+      );
+
+      const wdWallet = walletWD.filter(
+        r => normalizeStr(r["Shop Name"]) === normalizedShop
+      );
 
       const datesSet = new Set([
-        ...depositData.filter(r=>normalizeStr(r.SHOP)===normalizedShop).map(r=>r.DATE),
-        ...withdrawalData.filter(r=>normalizeStr(r.SHOP)===normalizedShop).map(r=>r.DATE),
-        ...stlmData.filter(r=>normalizeStr(r.SHOP)===normalizedShop).map(r=>r.DATE)
+        ...depositData
+          .filter(r => normalizeStr(r.SHOP) === normalizedShop)
+          .map(r => r.DATE),
+        ...withdrawalData
+          .filter(r => normalizeStr(r.SHOP) === normalizedShop)
+          .map(r => r.DATE),
+        ...stlmData
+          .filter(r => normalizeStr(r.SHOP) === normalizedShop)
+          .map(r => r.DATE)
       ]);
-      const sortedDates = Array.from(datesSet).filter(Boolean).sort((a,b)=>new Date(a)-new Date(b));
+
+      const sortedDates = Array.from(datesSet)
+        .filter(Boolean)
+        .sort((a, b) => new Date(a) - new Date(b));
 
       let runningBalance = bringForwardBalance;
-      const csvRows = [];
 
-      csvRows.push(shopName);
-      csvRows.push(`Shop Name: ${shopName}`);
-      csvRows.push(`Security Deposit: ${formatNum(securityDeposit)}`);
-      csvRows.push(`Bring Forward Balance: ${formatNum(bringForwardBalance)}`);
-      csvRows.push(`Team Leader: ${teamLeader}`);
-      const headers = ["DATE","DEPOSIT","WITHDRAWAL","IN","OUT","SETTLEMENT","SPECIAL PAYMENT","ADJUSTMENT","SEC DEPOSIT","DP COMM","WD COMM","ADD COMM","BALANCE"];
-      csvRows.push(headers.map(h=>`"${h}"`).join(','));
+      // ================= EXCEL WORKBOOK =================
+      const wb = XLSX.utils.book_new();
 
-      // B/F Balance row
-      csvRows.push([
-        'B/F Balance','0','0','0','0','0','0','0','0',
-        formatNum(bringForwardBalance*dpCommRate/100),
-        formatNum(bringForwardBalance*wdCommRate/100),
-        formatNum(bringForwardBalance*addCommRate/100),
-        formatNum(runningBalance)
-      ].map(v=>`"${v}"`).join(','));
+      // ---------------- DAILY SHEET ----------------
+      const dailySheet = [];
+
+      dailySheet.push([
+        "DATE","DEPOSIT","WITHDRAWAL","IN","OUT",
+        "SETTLEMENT","SPECIAL PAYMENT","ADJUSTMENT",
+        "SEC DEPOSIT","DP COMM","WD COMM","ADD COMM","BALANCE"
+      ]);
+
+      dailySheet.push([
+        "B/F Balance",0,0,0,0,0,0,0,0,0,0,0,
+        runningBalance
+      ]);
 
       for (const date of sortedDates) {
-        const deposits = depositData.filter(r=>normalizeStr(r.SHOP)===normalizedShop && r.DATE===date);
-        const withdrawals = withdrawalData.filter(r=>normalizeStr(r.SHOP)===normalizedShop && r.DATE===date);
-        const stlmForDate = stlmData.filter(r=>normalizeStr(r.SHOP)===normalizedShop && r.DATE===date);
+        const deposits = depositData.filter(
+          r => normalizeStr(r.SHOP) === normalizedShop && r.DATE === date
+        );
 
-        const depTotal = deposits.reduce((s,r)=>s+parseNum(r.AMOUNT),0);
-        const wdTotal = withdrawals.reduce((s,r)=>s+parseNum(r.AMOUNT),0);
-        const sumMode = mode => stlmForDate.filter(r=>normalizeStr(r.MODE)===mode).reduce((s,r)=>s+parseNum(r.AMOUNT),0);
+        const withdrawals = withdrawalData.filter(
+          r => normalizeStr(r.SHOP) === normalizedShop && r.DATE === date
+        );
 
-        const inAmt = sumMode("IN");
-        const outAmt = sumMode("OUT");
-        const settlement = sumMode("SETTLEMENT");
-        const specialPay = sumMode("SPECIAL PAYMENT");
-        const adjustment = sumMode("ADJUSTMENT");
-        const secDep = sumMode("SECURITY DEPOSIT");
+        const depTotal = deposits.reduce((s, r) => s + parseNum(r.AMOUNT), 0);
+        const wdTotal = withdrawals.reduce((s, r) => s + parseNum(r.AMOUNT), 0);
 
-        const dpComm = depTotal*dpCommRate/100;
-        const wdComm = wdTotal*wdCommRate/100;
-        const addComm = depTotal*addCommRate/100;
+        runningBalance += depTotal - wdTotal;
 
-        runningBalance += depTotal - wdTotal + inAmt - outAmt - settlement - specialPay + adjustment - dpComm - wdComm - addComm;
-
-        csvRows.push([
+        dailySheet.push([
           date,
-          formatNum(depTotal),
-          formatNum(wdTotal),
-          formatNum(inAmt),
-          formatNum(outAmt),
-          formatNum(settlement),
-          formatNum(specialPay),
-          formatNum(adjustment),
-          formatNum(secDep),
-          formatNum(dpComm),
-          formatNum(wdComm),
-          formatNum(addComm),
-          formatNum(runningBalance)
-        ].map(v=>`"${v}"`).join(','));
+          depTotal,
+          wdTotal,
+          0,0,0,0,0,0,0,0,0,
+          runningBalance
+        ]);
       }
 
-      const folder = zip.folder(teamLeader);
-      folder.file(`${shopName}.csv`, csvRows.join('\n'));
+      const ws1 = XLSX.utils.aoa_to_sheet(dailySheet);
+      XLSX.utils.book_append_sheet(wb, ws1, "Daily");
+
+      // ---------------- WALLET SHEET (NEW) ----------------
+      const walletSheet = [["Wallet","Reference","Amount","Date","Type"]];
+
+      dpWallet.forEach(r => {
+        walletSheet.push([
+          r.Wallet || "",
+          r.Reference || "",
+          parseNum(r.Amount),
+          r.Date || "",
+          "DEPOSIT"
+        ]);
+      });
+
+      wdWallet.forEach(r => {
+        walletSheet.push([
+          r.Wallet || "",
+          r.Reference || "",
+          parseNum(r.Amount),
+          r.Date || "",
+          "WITHDRAWAL"
+        ]);
+      });
+
+      const ws2 = XLSX.utils.aoa_to_sheet(walletSheet);
+      XLSX.utils.book_append_sheet(wb, ws2, "Wallet");
+
+      // ================= ADD TO ZIP =================
+      const excelBuffer = XLSX.write(wb, {
+        bookType: "xlsx",
+        type: "array"
+      });
+
+      zip.file(`${shopName}.xlsx`, excelBuffer);
     }
 
-    const content = await zip.generateAsync({type:"blob"});
-    saveAs(content, `All_Shops_Summary_${new Date().toISOString().slice(0,10)}.zip`);
+    const content = await zip.generateAsync({ type: "blob" });
+    saveAs(
+      content,
+      `All_Shops_Excel_${new Date().toISOString().slice(0,10)}.zip`
+    );
 
-  } catch(err){
+  } catch (err) {
     console.error(err);
-    alert("⚠️ Failed to generate ZIP: "+err.message);
+    alert("⚠️ Failed to generate ZIP: " + err.message);
   }
 }
 
